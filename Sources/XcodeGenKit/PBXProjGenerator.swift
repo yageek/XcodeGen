@@ -85,7 +85,8 @@ public class PBXProjGenerator {
         for target in spec.targets {
             targetNativeReferences[target.name] = generateUUID(PBXNativeTarget.self, target.name)
 
-            let fileReference = PBXFileReference(reference: generateUUID(PBXFileReference.self, target.name), sourceTree: .buildProductsDir, explicitFileType: target.type.fileExtension, path: target.filename, includeInIndex: 0)
+            let (explicitFileType, lastKnownFileType) = getFileTypesForProductsFileReference(target: target)
+            let fileReference = PBXFileReference(reference: generateUUID(PBXFileReference.self, target.name), sourceTree: .buildProductsDir, explicitFileType: explicitFileType, lastKnownFileType: lastKnownFileType, path: target.filename, includeInIndex: 0)
             addObject(fileReference)
             targetFileReferences[target.name] = fileReference.reference
 
@@ -478,7 +479,8 @@ public class PBXProjGenerator {
         if let fileReference = fileReferencesByPath[path] {
             return fileReference
         } else {
-            let fileReference = PBXFileReference(reference: generateUUID(PBXFileReference.self, path.lastComponent), sourceTree: .group, path: path.byRemovingBase(path: inPath).string)
+            let lastKnownFileType = PBXFileReference.fileType(path: path)
+            let fileReference = PBXFileReference(reference: generateUUID(PBXFileReference.self, path.lastComponent), sourceTree: .group, lastKnownFileType: lastKnownFileType, path: path.byRemovingBase(path: inPath).string)
             addObject(fileReference)
             fileReferencesByPath[path] = fileReference.reference
             return fileReference.reference
@@ -554,9 +556,11 @@ public class PBXProjGenerator {
                 if let cachedFileReference = fileReferencesByPath[path] {
                     fileReference = cachedFileReference
                 } else {
+                    let lastKnownFileType = PBXFileReference.fileType(path: path)
                     let reference = PBXFileReference(reference: generateUUID(PBXFileReference.self, path.lastComponent),
                                                      sourceTree: .group,
                                                      name: variantGroup != nil ? localisationName : path.lastComponent,
+                                                     lastKnownFileType: lastKnownFileType,
                                                      path: filePath)
                     addObject(reference)
                     fileReference = reference.reference
@@ -592,5 +596,14 @@ public class PBXProjGenerator {
         }
         groups.insert(group, at: 0)
         return (allSourceFiles, groups)
+    }
+
+    /// Returns fileTypes for Products FileReference for each target
+    /// - parameter target:
+    /// - returns: fileTypes in tuple
+    private func getFileTypesForProductsFileReference(target: Target) -> (explicitFileType: String?, lastKnownFileType: String?) {
+        let fileType = PBXFileReference.fileType(path: Path(target.filename))
+        let useExplicitFileType = (target.platform == .macOS || target.type == .framework)
+        return useExplicitFileType ? (fileType, nil) : (nil, fileType)
     }
 }
